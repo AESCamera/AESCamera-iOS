@@ -271,6 +271,19 @@ private let fast = 1_000
         #expect(VaultFiles.media(in: vault).count == 1)
     }
 
+    @Test func identicalBytesUnderAnotherNameAreRecognised() throws {
+        let dir = try TempDir(); defer { dir.cleanup() }
+        let vault = dir.file("vault")
+        let staged = dir.file("IMG-2026-01-01-00-00-00-000.enc")
+        try ImageCrypto.seal(Data.random(10), secret: secret, iterations: fast).write(to: staged)
+        guard case .imported(let first) = try VaultImporter.importFile(staged, preferredName: staged.lastPathComponent, into: vault, secret: secret) else {
+            Issue.record("not imported"); return
+        }
+        let renamed = try VaultImporter.importFile(staged, preferredName: "shared photo.enc", into: vault, secret: secret)
+        #expect(renamed == .alreadyInVault(first))
+        #expect(VaultFiles.media(in: vault).count == 1)
+    }
+
     @Test func differentBytesUnderTheSameNameGetASuffix() throws {
         let dir = try TempDir(); defer { dir.cleanup() }
         let vault = dir.file("vault")

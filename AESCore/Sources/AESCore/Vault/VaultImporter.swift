@@ -30,8 +30,7 @@ public enum VaultImporter {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: vault, withIntermediateDirectories: true)
 
-        let existing = vault.appendingPathComponent(name)
-        if fileManager.fileExists(atPath: existing.path), fileManager.contentsEqual(atPath: existing.path, andPath: staged.path) {
+        if let existing = identicalFile(to: staged, in: vault) {
             return .alreadyInVault(item(for: existing))
         }
 
@@ -62,6 +61,21 @@ public enum VaultImporter {
             try? fileManager.removeItem(at: target)
             throw error
         }
+    }
+
+    /// A media file in `vault` with exactly the bytes of `file`, whatever its name (a
+    /// re-shared photo, or a restore of files already there). Only same-size files are
+    /// compared, so this stays cheap.
+    static func identicalFile(to file: URL, in vault: URL) -> URL? {
+        let fileManager = FileManager.default
+        guard let size = (try? fileManager.attributesOfItem(atPath: file.path))?[.size] as? Int64 else { return nil }
+        // Listings resolve symlinks (/var → /private/var); answer in the caller's terms.
+        return VaultFiles.media(in: vault).lazy
+            .map { vault.appendingPathComponent($0.name) }
+            .first { candidate in
+                (try? fileManager.attributesOfItem(atPath: candidate.path))?[.size] as? Int64 == size &&
+                    fileManager.contentsEqual(atPath: candidate.path, andPath: file.path)
+            }
     }
 
     private static func item(for url: URL) -> MediaItem {

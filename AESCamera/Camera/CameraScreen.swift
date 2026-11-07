@@ -4,6 +4,7 @@ import SwiftUI
 struct CameraScreen: View {
     @Binding var path: NavigationPath
     @Environment(AppSession.self) private var session
+    @Environment(ImportCoordinator.self) private var importer
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var camera = CameraModel()
     @State private var onScreen = false
@@ -30,8 +31,12 @@ struct CameraScreen: View {
             onScreen = false
             camera.deactivate()
         }
-        .task(id: onScreen && session.isUnlocked) {
-            if onScreen && session.isUnlocked { await camera.activate() }
+        .task(id: cameraWanted) {
+            if cameraWanted {
+                await camera.activate()
+            } else {
+                camera.deactivate()
+            }
         }
         .onChange(of: camera.shutterCount) {
             flash = true
@@ -42,6 +47,11 @@ struct CameraScreen: View {
         } message: {
             Text(camera.message ?? "")
         }
+    }
+
+    /// The camera runs only while unlocked and actually on screen.
+    private var cameraWanted: Bool {
+        onScreen && session.isUnlocked && importer.staged == nil
     }
 
     // MARK: Preview

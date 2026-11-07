@@ -100,6 +100,28 @@ final class CaptureFlowTests: XCTestCase {
         }
     }
 
+    /// Run after handing the app a vault file with `simctl openurl` (see the README);
+    /// skipped when no import is waiting.
+    @MainActor
+    func testPendingImportOpensAndAddsToVault() throws {
+        let app = XCUIApplication()
+        app.activate()
+        let open = app.buttons["Open"]
+        guard open.waitForExistence(timeout: 3) else {
+            throw XCTSkip("No import pending")
+        }
+        open.tap()
+        unlock(app)
+        let add = app.buttons["Add to Vault"]
+        XCTAssertTrue(add.waitForExistence(timeout: 15))
+        snapshot("import-viewer")
+        add.tap()
+        // Files from this vault are already there (identical bytes): no duplicate.
+        XCTAssertTrue(app.staticTexts["Added"].waitForExistence(timeout: 15))
+        app.buttons["Close"].tap()
+        XCTAssertTrue(app.buttons["Open vault"].waitForExistence(timeout: 10))
+    }
+
     @MainActor
     func testLocksWhenBackgrounded() {
         let app = XCUIApplication()

@@ -50,6 +50,11 @@ public enum KDF {
     public static let saltSize = 16
     static let keySize = 32
 
+    /// A fresh random 16-byte salt for a photo or video key.
+    public static func newSalt() -> [UInt8] {
+        Bytes.random(saltSize)
+    }
+
     /// PBKDF2 → 256-bit AES key. Uncached; use `KeyCache` in app code.
     public static func derive(_ secret: Secret, salt: [UInt8], parameters: KDFParameters) throws -> SymmetricKey {
         var derived = [UInt8](repeating: 0, count: keySize)

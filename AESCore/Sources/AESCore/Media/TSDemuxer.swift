@@ -37,6 +37,12 @@ public struct TSDemuxer {
         public let sampleRate: Int
         public let channels: Int
 
+        public init(objectType: Int, sampleRate: Int, channels: Int) {
+            self.objectType = objectType
+            self.sampleRate = sampleRate
+            self.channels = channels
+        }
+
         /// The 2-byte AudioSpecificConfig (the decoder's "magic cookie").
         public var audioSpecificConfig: Data {
             let index = UInt8(TSDemuxer.sampleRates.firstIndex(of: sampleRate) ?? 4)

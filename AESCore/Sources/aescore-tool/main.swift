@@ -8,6 +8,7 @@ import Foundation
 //   aescore-tool decrypt <file.enc|file.encv> <password> <output>
 //   aescore-tool probe   <file.mp4|file.ts>
 //   aescore-tool find    <vault-base-dir> <password>
+//   aescore-tool make-ts <out.encv> <password> [seconds] [rotation] [--no-audio]
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
@@ -82,6 +83,15 @@ case "find":
     guard rest.count == 2 else { fail("usage: find <base dir> <password>") }
     let vault = try VaultLocator.find(Secret(rest[1]), in: URL(fileURLWithPath: rest[0]))
     print(vault?.path ?? "no vault for this password")
+
+case "make-ts":
+    guard rest.count >= 2 else { fail("usage: make-ts <out.encv> <password> [seconds] [rotation] [--no-audio]") }
+    let numbers = rest.dropFirst(2).compactMap { Int($0) }
+    try MakeTS.run(
+        output: URL(fileURLWithPath: rest[0]), password: rest[1],
+        seconds: numbers.first ?? 12, rotation: numbers.dropFirst().first ?? 90,
+        audio: !rest.contains("--no-audio")
+    )
 
 default:
     fail("unknown command \(command)")

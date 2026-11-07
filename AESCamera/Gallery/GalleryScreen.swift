@@ -131,6 +131,7 @@ struct GalleryScreen: View {
                     selection = [item.id]
                 }
             }
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel(item.isVideo ? "Video" : "Photo")
             .accessibilityIdentifier(item.isVideo ? "Video" : "Photo")
             .accessibilityValue(selection.contains(item.id) ? "Selected" : "")

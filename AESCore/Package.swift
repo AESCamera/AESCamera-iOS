@@ -9,6 +9,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "AESCore"),
+        .executableTarget(name: "aescore-tool", dependencies: ["AESCore"]),
         .testTarget(name: "AESCoreTests", dependencies: ["AESCore"]),
     ]
 )

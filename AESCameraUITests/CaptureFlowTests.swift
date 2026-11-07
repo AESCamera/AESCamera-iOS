@@ -70,6 +70,37 @@ final class CaptureFlowTests: XCTestCase {
     }
 
     @MainActor
+    func testMoveVaultAndBack() {
+        let app = XCUIApplication()
+        app.launch()
+        unlock(app)
+        let shutter = app.buttons["Take photo"]
+        XCTAssertTrue(shutter.waitForExistence(timeout: 15))
+        shutter.tap()
+        XCTAssertTrue(app.buttons["Open vault"].waitForEnabled(timeout: 10))
+        app.buttons["Open vault"].tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        sleep(2)
+
+        let count = app.buttons.matching(identifier: "Photo").count + app.buttons.matching(identifier: "Video").count
+        XCTAssertGreaterThan(count, 0)
+
+        for target in ["Files app", "Private"] {
+            app.buttons["More"].tap()
+            app.buttons["Settings"].tap()
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Vault location")).firstMatch.tap()
+            app.buttons[target].tap()
+            app.buttons["Move"].tap()
+            XCTAssertTrue(app.staticTexts["Moving vault…"].waitForNonExistence(timeout: 30))
+            snapshot("settings-\(target)")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            sleep(2)
+            let after = app.buttons.matching(identifier: "Photo").count + app.buttons.matching(identifier: "Video").count
+            XCTAssertEqual(after, count, "items after moving to \(target)")
+        }
+    }
+
+    @MainActor
     func testLocksWhenBackgrounded() {
         let app = XCUIApplication()
         app.launch()

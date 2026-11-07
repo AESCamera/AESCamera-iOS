@@ -44,6 +44,29 @@ final class CaptureFlowTests: XCTestCase {
 
         app.buttons["Open vault"].tap()
         XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        sleep(2)
+        snapshot("gallery")
+
+        // The newest item is the video just recorded.
+        let video = app.buttons.matching(identifier: "Video").firstMatch
+        XCTAssertTrue(video.waitForExistence(timeout: 10))
+        video.tap()
+        XCTAssertTrue(app.staticTexts["Checking video…"].waitForNonExistence(timeout: 20))
+        XCTAssertFalse(app.staticTexts["This video can't be opened."].exists)
+        sleep(2)
+        snapshot("video")
+
+        app.swipeLeft()
+        sleep(2)
+        snapshot("photo")
+    }
+
+    @MainActor
+    func snapshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor

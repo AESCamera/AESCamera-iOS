@@ -75,6 +75,8 @@ final class AppSession {
         preparedPhotoSalt = nil
         preparedVideoSalt = nil
         KeyCache.shared.clear()
+        ThumbnailStore.shared.purge()
+        VerificationCache.shared.purge()
         vaultRevision += 1
     }
 

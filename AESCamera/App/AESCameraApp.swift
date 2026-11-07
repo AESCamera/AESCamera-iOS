@@ -38,6 +38,9 @@ struct RootView: View {
                     case .settings: SettingsScreen()
                     }
                 }
+                .navigationDestination(for: ViewerRoute.self) { route in
+                    ViewerScreen(source: .vault(startID: route.startID))
+                }
         }
         .overlay {
             if session.isUnlocked && privacy.hidesContent {

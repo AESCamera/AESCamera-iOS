@@ -10,7 +10,9 @@ public enum VaultLocation: String, Sendable, CaseIterable {
     case shared
 }
 
-public struct VaultMoveCancelled: Error {}
+public struct VaultMoveCancelled: Error {
+    public init() {}
+}
 
 public enum VaultStorage {
     public static let privateDirectoryName = "vault"

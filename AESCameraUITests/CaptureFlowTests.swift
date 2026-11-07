@@ -27,6 +27,7 @@ final class CaptureFlowTests: XCTestCase {
 
         let shutter = app.buttons["Take photo"]
         XCTAssertTrue(shutter.waitForExistence(timeout: 15))
+        snapshot("camera")
         shutter.tap()
         // Normal mode disables the controls until the save completes.
         let toVideo = app.buttons["Switch to video"]

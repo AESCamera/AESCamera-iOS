@@ -150,31 +150,55 @@ struct CameraScreen: View {
 
             Spacer()
 
-            HStack(alignment: .bottom) {
-                galleryButton
-                Spacer()
-                ShutterButton(mode: camera.mode, recording: camera.isRecording) {
-                    camera.shutter()
+            Group {
+                if sizeClass == .regular {
+                    // Tablets: controls clustered around the shutter, as on Android.
+                HStack(spacing: 36) {
+                    galleryButton
+                    shutterButton
+                    modeButton
+                    flipButton
                 }
-                .disabled(!camera.shutterEnabled)
-                Spacer()
-                VStack(spacing: 18) {
-                    CameraButton(
-                        systemImage: camera.mode == .photo ? "video.fill" : "camera.fill",
-                        label: camera.mode == .photo ? "Switch to video" : "Switch to photo"
-                    ) {
-                        Task { await camera.toggleMode() }
+            } else {
+                HStack(alignment: .bottom) {
+                    galleryButton
+                    Spacer()
+                    shutterButton
+                    Spacer()
+                    VStack(spacing: 18) {
+                        modeButton
+                        flipButton
                     }
-                    .disabled(camera.isRecording || camera.pendingSaves > 0 || camera.permission != .granted)
-                    CameraButton(systemImage: "arrow.triangle.2.circlepath.camera.fill", label: "Switch camera") {
-                        Task { await camera.flip() }
-                    }
-                    .disabled(camera.isRecording || camera.permission != .granted || camera.isSimulated)
                 }
+            }
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
         }
+    }
+
+    private var shutterButton: some View {
+        ShutterButton(mode: camera.mode, recording: camera.isRecording) {
+            camera.shutter()
+        }
+        .disabled(!camera.shutterEnabled)
+    }
+
+    private var modeButton: some View {
+        CameraButton(
+            systemImage: camera.mode == .photo ? "video.fill" : "camera.fill",
+            label: camera.mode == .photo ? "Switch to video" : "Switch to photo"
+        ) {
+            Task { await camera.toggleMode() }
+        }
+        .disabled(camera.isRecording || camera.pendingSaves > 0 || camera.permission != .granted)
+    }
+
+    private var flipButton: some View {
+        CameraButton(systemImage: "arrow.triangle.2.circlepath.camera.fill", label: "Switch camera") {
+            Task { await camera.flip() }
+        }
+        .disabled(camera.isRecording || camera.permission != .granted || camera.isSimulated)
     }
 
     private var galleryButton: some View {

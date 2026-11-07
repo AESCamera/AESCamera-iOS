@@ -4,6 +4,7 @@ import SwiftUI
 struct GalleryScreen: View {
     @Binding var path: NavigationPath
     @Environment(AppSession.self) private var session
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var items: [MediaItem] = []
     @State private var loaded = false
     @State private var selecting = false
@@ -76,7 +77,7 @@ struct GalleryScreen: View {
 
     private var grid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 200), spacing: 2)], spacing: 2, pinnedViews: [.sectionHeaders]) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: sizeClass == .regular ? 180 : 110, maximum: 280), spacing: 2)], spacing: 2, pinnedViews: [.sectionHeaders]) {
                 ForEach(sections, id: \.day) { section in
                     Section {
                         ForEach(section.items) { item in

@@ -122,6 +122,39 @@ final class CaptureFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Open vault"].waitForExistence(timeout: 10))
     }
 
+    /// Plays the oldest video, which a test run seeds with an Android-style MPEG-TS file
+    /// (`aescore-tool make-ts`, copied into the vault). Skipped when there is none.
+    @MainActor
+    func testAndroidVideoPlaysAndSeeks() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitest-no-autoplay"]
+        app.launch()
+        unlock(app)
+        let vaultButton = app.buttons["Open vault"]
+        XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
+        vaultButton.tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        sleep(1)
+        let videos = app.buttons.matching(identifier: "Video")
+        guard videos.count > 0 else { throw XCTSkip("No videos") }
+        videos.element(boundBy: videos.count - 1).tap()
+
+        // Starts paused (no autoplay in UI tests) with the first frame showing.
+        XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 20))
+        snapshot("ts-start")
+
+        app.sliders["Position"].adjust(toNormalizedSliderPosition: 0.6)
+        sleep(2)
+        let elapsed = app.staticTexts["Elapsed"].label
+        let seconds = elapsed.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+        XCTAssertGreaterThan(seconds, 8, "position after seeking: \(elapsed)")
+        snapshot("ts-seeked")
+
+        app.buttons["Play"].tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 5))
+        snapshot("ts-playing")
+    }
+
     @MainActor
     func testLocksWhenBackgrounded() {
         let app = XCUIApplication()

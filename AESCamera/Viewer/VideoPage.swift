@@ -3,6 +3,12 @@ import AVKit
 import AESCore
 import SwiftUI
 
+/// Switches for UI tests, which can't keep up with a playing video (the app never looks
+/// idle to XCUITest while frames are being rendered).
+enum UITestOptions {
+    static let noAutoplay = ProcessInfo.processInfo.arguments.contains("-uitest-no-autoplay")
+}
+
 /// Integrity verdicts, so a long video isn't re-read on every visit. Emptied on lock.
 @MainActor
 final class VerificationCache {
@@ -34,6 +40,7 @@ struct VideoPage: View {
         case idle
         case verifying
         case playing(AVPlayer, EncryptedAssetLoader)
+        case playingTS(TSPlayer)
         case failed(String)
     }
 
@@ -52,6 +59,8 @@ struct VideoPage: View {
                 ProgressView("Checking video…").tint(.white).foregroundStyle(.white)
             case .playing(let player, _):
                 VideoPlayer(player: player)
+            case .playingTS(let player):
+                TSPlayerView(player: player)
             case .failed(let reason):
                 Label(reason, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.white)
@@ -62,8 +71,10 @@ struct VideoPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(isPlaying ? "Playing video" : "Video page")
         .overlay(alignment: .top) {
-            if unverified, case .playing = phase {
+            if unverified, isPlaying {
                 Label("Unverified", systemImage: "exclamationmark.shield")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
@@ -82,6 +93,13 @@ struct VideoPage: View {
             }
         }
         .onDisappear(perform: stop)
+    }
+
+    private var isPlaying: Bool {
+        switch phase {
+        case .playing, .playingTS: true
+        default: false
+        }
     }
 
     private func start() async {
@@ -104,8 +122,15 @@ struct VideoPage: View {
 
         do {
             let reader = try await Task.detached { try EncvReader(url: url, secret: secret) }.value
-            guard reader.header.container == .fragmentedMP4 else {
-                phase = .failed("Playing videos recorded on Android isn't supported yet.")
+            if reader.header.container == .mpeg2TS {
+                // Recorded on Android: AVPlayer can't play raw MPEG-TS.
+                let player = try await TSPlayer(reader: reader)
+                guard !Task.isCancelled else {
+                    player.stop()
+                    return
+                }
+                phase = .playingTS(player)
+                if !UITestOptions.noAutoplay { player.play() }
                 return
             }
             let loader = EncryptedAssetLoader(reader: reader)
@@ -119,10 +144,77 @@ struct VideoPage: View {
     }
 
     private func stop() {
-        if case .playing(let player, _) = phase {
+        switch phase {
+        case .playing(let player, _):
             player.pause()
             player.replaceCurrentItem(with: nil)
+        case .playingTS(let player):
+            player.stop()
+        default:
+            break
         }
         phase = .idle
+    }
+}
+
+/// Minimal transport controls for the TS player: play/pause, scrubber, times.
+struct TSPlayerView: View {
+    let player: TSPlayer
+    @State private var scrubbing: Double?
+    @State private var seekTask: Task<Void, Never>?
+
+    /// Seeks once the value has been still for a moment. Works for dragging, taps and
+    /// VoiceOver adjustments alike (the latter never report "editing ended").
+    private func scrub(to value: Double) {
+        scrubbing = value
+        seekTask?.cancel()
+        seekTask = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await player.seek(to: value)
+            if scrubbing == value { scrubbing = nil }
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            TSVideoSurface(player: player)
+                .ignoresSafeArea()
+            if let failure = player.failure {
+                Text(failure).foregroundStyle(.white).padding()
+            }
+            HStack(spacing: 12) {
+                Button {
+                    player.isPlaying ? player.pause() : player.play()
+                } label: {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title3)
+                        .frame(width: 32, height: 32)
+                }
+                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                Text(Self.format(scrubbing ?? player.currentTime))
+                    .monospacedDigit()
+                    .accessibilityIdentifier("Elapsed")
+                Slider(
+                    value: Binding(get: { scrubbing ?? player.currentTime }, set: { scrub(to: $0) }),
+                    in: 0...max(player.duration, 0.1)
+                )
+                .accessibilityLabel("Position")
+                Text(Self.format(player.duration))
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.55), in: Capsule())
+            .padding(.horizontal, 12)
+            .padding(.bottom, 110)
+        }
+    }
+
+    static func format(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded(.down)))
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 }

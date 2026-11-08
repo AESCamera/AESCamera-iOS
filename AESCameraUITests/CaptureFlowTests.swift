@@ -2,7 +2,9 @@ import XCTest
 
 /// Drives the real app in the Simulator (which uses the simulated camera feed).
 final class CaptureFlowTests: XCTestCase {
-    static let password = "uitest-password"
+    /// Override with `TEST_RUNNER_UITEST_PASSWORD=…` on the xcodebuild command line, e.g. to
+    /// open a vault of files recorded on Android.
+    static let password = ProcessInfo.processInfo.environment["UITEST_PASSWORD"] ?? "uitest-password"
 
     override func setUp() {
         continueAfterFailure = false
@@ -123,6 +125,27 @@ final class CaptureFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Open vault"].waitForExistence(timeout: 10))
     }
 
+    /// Opens the oldest photo in the vault and checks it decrypts. With
+    /// `TEST_RUNNER_UITEST_PASSWORD` this checks files imported from Android.
+    @MainActor
+    func testOldestPhotoOpens() throws {
+        let app = XCUIApplication()
+        app.launch()
+        unlock(app)
+        let vaultButton = app.buttons["Open vault"]
+        XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
+        vaultButton.tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        sleep(2)
+        snapshot("gallery")
+        let photos = app.buttons.matching(identifier: "Photo")
+        guard photos.count > 0 else { throw XCTSkip("No photos") }
+        photos.element(boundBy: photos.count - 1).tap()
+        sleep(4)
+        XCTAssertFalse(app.staticTexts["This photo can't be opened."].exists)
+        snapshot("photo")
+    }
+
     /// Plays the oldest video, which a test run seeds with an Android-style MPEG-TS file
     /// (`aescore-tool make-ts`, copied into the vault). Skipped when there is none.
     @MainActor
@@ -146,9 +169,15 @@ final class CaptureFlowTests: XCTestCase {
 
         app.sliders["Position"].adjust(toNormalizedSliderPosition: 0.6)
         sleep(2)
+        func seconds(_ label: String) -> Int {
+            label.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
+        }
         let elapsed = app.staticTexts["Elapsed"].label
-        let seconds = elapsed.split(separator: ":").compactMap { Int($0) }.reduce(0) { $0 * 60 + $1 }
-        XCTAssertGreaterThan(seconds, 8, "position after seeking: \(elapsed)")
+        let duration = app.staticTexts["Duration"].label
+        XCTAssertGreaterThan(seconds(duration), 2, "duration: \(duration)")
+        XCTAssertGreaterThanOrEqual(
+            seconds(elapsed), seconds(duration) / 2, "position after seeking: \(elapsed) of \(duration)"
+        )
         snapshot("ts-seeked")
 
         app.buttons["Play"].tap()

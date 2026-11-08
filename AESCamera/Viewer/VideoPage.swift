@@ -202,6 +202,7 @@ struct TSPlayerView: View {
                 .accessibilityLabel("Position")
                 Text(Self.format(player.duration))
                     .monospacedDigit()
+                    .accessibilityIdentifier("Duration")
             }
             .font(.caption)
             .foregroundStyle(.white)

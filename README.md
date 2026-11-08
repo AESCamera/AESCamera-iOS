@@ -59,6 +59,10 @@ xcodebuild test -project AESCamera.xcodeproj -scheme AESCamera \
   -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
+The UI tests unlock with `uitest-password`. To run them against another vault, such as files
+recorded on Android and imported into the Simulator, prefix the command with
+`TEST_RUNNER_UITEST_PASSWORD=<password>`.
+
 The crypto tests include reference values computed independently with Python's `hashlib`
 and the `openssl` CLI, pinning PBKDF2, AES-CTR (with counter carry), the `.encv` MAC key and
 legacy CBC to the same definitions Android uses.

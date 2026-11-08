@@ -146,6 +146,133 @@ final class CaptureFlowTests: XCTestCase {
         snapshot("photo")
     }
 
+    @MainActor
+    func attachTree(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(string: app.debugDescription)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func openSettings(_ app: XCUIApplication) {
+        let vaultButton = app.buttons["Open vault"]
+        XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
+        vaultButton.tap()
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        app.buttons["More"].tap()
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
+    }
+
+    /// In the system file picker, goes to On My iPhone › AES Camera (where the Files app
+    /// shows this app's Documents folder). The picker reopens where it was last, so this
+    /// climbs out of an export folder or walks in from On My iPhone as needed.
+    @MainActor
+    func pickerGoToAppFolder(_ app: XCUIApplication) {
+        let pickerBar = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        let browse = app.tabBars.buttons["Browse"]
+        XCTAssertTrue(browse.waitForExistence(timeout: 30))
+        browse.tap()
+        let here = app.buttons["AES Camera, Actions Menu"]
+        let title = pickerBar.buttons.matching(NSPredicate(format: "label ENDSWITH ', Actions Menu'")).firstMatch
+        for step in 0..<3 {
+            // The picker's contents reach the accessibility tree a moment after its bar.
+            _ = title.waitForExistence(timeout: 30)
+            if here.exists { break }
+            attachTree(app, "picker-\(step)")
+            if title.exists && title.label.hasPrefix("AESCamera-") {
+                pickerBar.buttons["BackButton"].tap()
+            } else if app.cells.matching(NSPredicate(format: "identifier BEGINSWITH 'AES Camera'")).firstMatch.exists {
+                app.cells.matching(NSPredicate(format: "identifier BEGINSWITH 'AES Camera'")).firstMatch.tap()
+            } else {
+                app.staticTexts["On My iPhone"].firstMatch.tap()
+            }
+            sleep(2)
+        }
+        XCTAssertTrue(here.waitForExistence(timeout: 5), "not in the app folder")
+    }
+
+    @MainActor
+    func alertMessage(_ app: XCUIApplication, timeout: TimeInterval) -> String {
+        let alert = app.alerts["AES Camera"]
+        XCTAssertTrue(alert.waitForExistence(timeout: timeout))
+        let message = alert.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
+        let attachment = XCTAttachment(string: message)
+        attachment.name = "message"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        return message
+    }
+
+    /// Opens Settings › Restore Files… and goes to the newest `AESCamera-…` export folder
+    /// in the app's Documents. Returns its files, or nil when there is no such folder.
+    @MainActor
+    func openRestorePicker(_ app: XCUIApplication) -> XCUIElementQuery? {
+        app.buttons["Restore Files…"].tap()
+        let pickerBar = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        let title = pickerBar.buttons.matching(NSPredicate(format: "label ENDSWITH ', Actions Menu'")).firstMatch
+        let browse = app.tabBars.buttons["Browse"]
+        XCTAssertTrue(browse.waitForExistence(timeout: 30))
+        browse.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 30))
+        if !title.label.hasPrefix("AESCamera-") {
+            pickerGoToAppFolder(app)
+            let folders = app.cells.matching(NSPredicate(format: "identifier BEGINSWITH 'AESCamera-'"))
+            guard folders.count > 0 else { return nil }
+            folders.element(boundBy: folders.count - 1).tap()
+        }
+        let files = app.cells.matching(NSPredicate(format: "identifier CONTAINS '.enc'"))
+        XCTAssertTrue(files.firstMatch.waitForExistence(timeout: 30))
+        return files
+    }
+
+    /// Restores every file of the newest `AESCamera-…` export folder in the app's
+    /// Documents (put there by hand, e.g. an Android export), one file per pick: the
+    /// iOS 26 Simulator's picker offers no multiple selection. Skipped when there is none.
+    @MainActor
+    func testRestoreExportFolder() throws {
+        let app = XCUIApplication()
+        app.launch()
+        unlock(app)
+        openSettings(app)
+        guard let first = openRestorePicker(app) else {
+            app.buttons["Cancel"].tap()
+            throw XCTSkip("No export folder in Documents")
+        }
+        let names = first.allElementsBoundByIndex.map(\.identifier)
+        for (index, name) in names.enumerated() {
+            let files = index == 0 ? first : openRestorePicker(app)!
+            files.matching(identifier: name).firstMatch.tap()
+            let message = alertMessage(app, timeout: 60)
+            XCTAssertTrue(message.contains("Restored 1"), "\(name): \(message)")
+            app.alerts.buttons["OK"].tap()
+        }
+        app.navigationBars["Settings"].buttons["BackButton"].tap()
+        sleep(3)
+        snapshot("gallery")
+    }
+
+    /// Exports the vault to the folder the picker opens at: in the Simulator that's its
+    /// last location, somewhere under On My iPhone › AES Camera (the app's Documents).
+    @MainActor
+    func testExportToDocuments() {
+        let app = XCUIApplication()
+        app.launch()
+        unlock(app)
+        openSettings(app)
+        app.buttons["Export Vault…"].tap()
+        let browse = app.tabBars.buttons["Browse"]
+        XCTAssertTrue(browse.waitForExistence(timeout: 30))
+        browse.tap()
+        let open = app.buttons["Open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 30))
+        open.tap()
+        let message = alertMessage(app, timeout: 60)
+        XCTAssertTrue(message.contains("Exported"), message)
+        XCTAssertFalse(message.contains("failed"), message)
+    }
+
     /// Plays the oldest video, which a test run seeds with an Android-style MPEG-TS file
     /// (`aescore-tool make-ts`, copied into the vault). Skipped when there is none.
     @MainActor

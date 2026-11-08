@@ -63,6 +63,10 @@ The UI tests unlock with `uitest-password`. To run them against another vault, s
 recorded on Android and imported into the Simulator, prefix the command with
 `TEST_RUNNER_UITEST_PASSWORD=<password>`.
 
+`testExportToDocuments` and `testRestoreExportFolder` change files in the app's Documents
+folder, so they run only with `TEST_RUNNER_UITEST_TRANSFER=1`. The restore test restores the
+newest `AESCamera-…` export folder under Documents, e.g. one copied from Android.
+
 The crypto tests include reference values computed independently with Python's `hashlib`
 and the `openssl` CLI, pinning PBKDF2, AES-CTR (with counter carry), the `.encv` MAC key and
 legacy CBC to the same definitions Android uses.

@@ -154,6 +154,14 @@ final class CaptureFlowTests: XCTestCase {
         add(attachment)
     }
 
+    /// The export and restore tests change files in Documents, so they run only when
+    /// asked: `TEST_RUNNER_UITEST_TRANSFER=1`.
+    func requireTransferTests() throws {
+        guard ProcessInfo.processInfo.environment["UITEST_TRANSFER"] == "1" else {
+            throw XCTSkip("Set TEST_RUNNER_UITEST_TRANSFER=1 to run")
+        }
+    }
+
     @MainActor
     func openSettings(_ app: XCUIApplication) {
         let vaultButton = app.buttons["Open vault"]
@@ -232,6 +240,7 @@ final class CaptureFlowTests: XCTestCase {
     /// iOS 26 Simulator's picker offers no multiple selection. Skipped when there is none.
     @MainActor
     func testRestoreExportFolder() throws {
+        try requireTransferTests()
         let app = XCUIApplication()
         app.launch()
         unlock(app)
@@ -256,7 +265,8 @@ final class CaptureFlowTests: XCTestCase {
     /// Exports the vault to the folder the picker opens at: in the Simulator that's its
     /// last location, somewhere under On My iPhone › AES Camera (the app's Documents).
     @MainActor
-    func testExportToDocuments() {
+    func testExportToDocuments() throws {
+        try requireTransferTests()
         let app = XCUIApplication()
         app.launch()
         unlock(app)

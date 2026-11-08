@@ -30,9 +30,17 @@ struct SettingsScreen: View {
             }
 
             Section {
+                // One file importer per button: with both on the same view only one of
+                // them is ever presented (Export Vault… did nothing).
                 Button("Export Vault…") { exporting = true }
                     .disabled(session.vaultURL == nil)
+                    .fileImporter(isPresented: $exporting, allowedContentTypes: [.folder]) { result in
+                        if case .success(let folder) = result { export(to: folder) }
+                    }
                 Button("Restore Files…") { restoring = true }
+                    .fileImporter(isPresented: $restoring, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+                        if case .success(let urls) = result { restore(urls) }
+                    }
             } header: {
                 Text("Backup")
             } footer: {
@@ -63,17 +71,21 @@ struct SettingsScreen: View {
         } message: {
             Text("All vaults are moved, for every password. Nothing is decrypted.")
         }
-        .fileImporter(isPresented: $exporting, allowedContentTypes: [.folder]) { result in
-            if case .success(let folder) = result { export(to: folder) }
+        // An overlay, not a sheet: a sheet can't appear while the file picker is still
+        // closing, and the result alert can't appear while the sheet is closing, so
+        // either could be silently dropped.
+        .overlay {
+            if let progress {
+                ZStack {
+                    Color.black.opacity(0.4).ignoresSafeArea()
+                    ProgressSheet(progress: progress)
+                        .frame(maxWidth: 360)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+                        .padding(24)
+                }
+            }
         }
-        .fileImporter(isPresented: $restoring, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result { restore(urls) }
-        }
-        .sheet(item: $progress) { progress in
-            ProgressSheet(progress: progress)
-                .interactiveDismissDisabled()
-                .presentationDetents([.height(220)])
-        }
+        .navigationBarBackButtonHidden(progress != nil)
         .alert("AES Camera", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {

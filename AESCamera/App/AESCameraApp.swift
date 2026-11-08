@@ -113,5 +113,8 @@ struct RootView: View {
                     ViewerScreen(source: .vault(startID: route.startID))
                 }
         }
+        // The camera is always dark; set here, not on CameraScreen, because a preferred
+        // scheme there would apply to the whole window and every screen pushed over it.
+        .preferredColorScheme(path.isEmpty && session.isUnlocked ? .dark : nil)
     }
 }

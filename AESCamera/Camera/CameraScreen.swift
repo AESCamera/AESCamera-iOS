@@ -22,7 +22,8 @@ struct CameraScreen: View {
             controls
         }
         .toolbar(.hidden, for: .navigationBar)
-        .preferredColorScheme(.dark)
+        // Dark controls over the preview; RootView turns the status bar light here.
+        .environment(\.colorScheme, .dark)
         .onAppear {
             camera.attach(to: session)
             onScreen = true

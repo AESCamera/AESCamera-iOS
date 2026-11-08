@@ -64,7 +64,7 @@ struct ViewerScreen: View {
         .toolbarColorScheme(.dark, for: .navigationBar, .bottomBar)
         .toolbar(chromeHidden ? .hidden : .visible, for: .navigationBar, .bottomBar)
         .statusBarHidden(chromeHidden)
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .animation(.easeInOut(duration: 0.2), value: chromeHidden)
         .onChange(of: current) { zoomed = false }
         .task(id: session.vaultRevision) { await load() }

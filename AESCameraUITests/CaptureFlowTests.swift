@@ -18,7 +18,16 @@ final class CaptureFlowTests: XCTestCase {
         let tip = app.buttons["Continue"]
         if tip.waitForExistence(timeout: 1) { tip.tap() }
         field.typeText(password)
-        app.buttons["Unlock"].tap()
+        // Typing into a just-focused field is occasionally dropped: type again.
+        let unlockButton = app.buttons["Unlock"]
+        if !unlockButton.waitForEnabled(timeout: 2) {
+            field.tap()
+            field.typeText(password)
+        }
+        XCTAssertTrue(unlockButton.waitForEnabled(timeout: 5))
+        unlockButton.tap()
+        // The keyboard slides away over the bottom controls; taps there land on it.
+        _ = app.keyboards.firstMatch.waitForNonExistence(timeout: 30)
     }
 
     @MainActor
@@ -134,16 +143,34 @@ final class CaptureFlowTests: XCTestCase {
         unlock(app)
         let vaultButton = app.buttons["Open vault"]
         XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
-        vaultButton.tap()
-        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        openVault(app)
         sleep(2)
         snapshot("gallery")
+        scrollToOldest(app)
         let photos = app.buttons.matching(identifier: "Photo")
         guard photos.count > 0 else { throw XCTSkip("No photos") }
         photos.element(boundBy: photos.count - 1).tap()
         sleep(4)
         XCTAssertFalse(app.staticTexts["This photo can't be opened."].exists)
         snapshot("photo")
+    }
+
+    /// Opens the gallery. A tap just after unlocking can land while the keyboard is still
+    /// sliding away, so it is retried once.
+    @MainActor
+    func openVault(_ app: XCUIApplication) {
+        app.buttons["Open vault"].tap()
+        if !app.navigationBars["Vault"].waitForExistence(timeout: 3) {
+            app.buttons["Open vault"].tap()
+        }
+        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+    }
+
+    /// The grid only exposes tiles on screen; the oldest are at the bottom.
+    @MainActor
+    func scrollToOldest(_ app: XCUIApplication) {
+        for _ in 0..<8 { app.swipeUp(velocity: .fast) }
+        sleep(1)
     }
 
     @MainActor
@@ -166,8 +193,7 @@ final class CaptureFlowTests: XCTestCase {
     func openSettings(_ app: XCUIApplication) {
         let vaultButton = app.buttons["Open vault"]
         XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
-        vaultButton.tap()
-        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        openVault(app)
         app.buttons["More"].tap()
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 10))
@@ -293,9 +319,9 @@ final class CaptureFlowTests: XCTestCase {
         unlock(app)
         let vaultButton = app.buttons["Open vault"]
         XCTAssertTrue(vaultButton.waitForEnabled(timeout: 15))
-        vaultButton.tap()
-        XCTAssertTrue(app.navigationBars["Vault"].waitForExistence(timeout: 10))
+        openVault(app)
         sleep(1)
+        scrollToOldest(app)
         let videos = app.buttons.matching(identifier: "Video")
         guard videos.count > 0 else { throw XCTSkip("No videos") }
         videos.element(boundBy: videos.count - 1).tap()

@@ -62,7 +62,7 @@ private let fast = 1_000
         let secret = Secret("legacy key")
         let vault = dir.file("0123456789abcdef0123456789abcdef")
         try FileManager.default.createDirectory(at: vault, withIntermediateDirectories: true)
-        try LegacyCBC.encrypt(VaultLocator.verifierMagic, secret: secret).write(to: vault.appendingPathComponent(".vault"))
+        try LegacyCBC.encrypt(VaultLocator.verifierMagicV1, secret: secret).write(to: vault.appendingPathComponent(".vault"))
 
         #expect(try VaultLocator.find(secret, in: dir.url, verifierIterations: fast)?.lastPathComponent == vault.lastPathComponent)
         #expect(ImageCrypto.isAuthenticated(try Data(contentsOf: vault.appendingPathComponent(".vault"))))

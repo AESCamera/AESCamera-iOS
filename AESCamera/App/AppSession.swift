@@ -8,6 +8,8 @@ import SwiftUI
 ///
 /// - Unlock looks up an existing vault (one PBKDF2 per vault scanned, off the main
 ///   actor). Nothing is created; `ensureVault()` creates the vault on the first save.
+///   A duress password wipes its targets inside that same "Unlocking…" step, then opens
+///   its decoy vault like any other.
 /// - The app locks as soon as it goes to the background: iOS can suspend it at any time,
 ///   so a grace-period timer isn't reliable.
 @MainActor @Observable
@@ -23,6 +25,9 @@ final class AppSession {
     private(set) var secret: Secret?
     /// The vault of the current password, nil while locked or before the first save.
     private(set) var vaultURL: URL?
+    /// The open vault's verifier settings (the duress password it set up, if any), nil
+    /// while locked or before the vault exists.
+    private(set) var vaultPayload: VerifierPayload?
     /// Bumped whenever the vault contents change in a way list screens should reload for.
     private(set) var vaultRevision = 0
 
@@ -48,8 +53,8 @@ final class AppSession {
         state = .unlocking
         let secret = Secret(password)
         let base = baseURL
-        let vault = await Task.detached(priority: .userInitiated) {
-            try? VaultLocator.find(secret, in: base)
+        let match = await Task.detached(priority: .userInitiated) {
+            try? VaultLocator.unlock(secret, in: base)
         }.value
         // Locked (backgrounded) while unlocking: drop the result.
         guard state == .unlocking else {
@@ -57,7 +62,8 @@ final class AppSession {
             return
         }
         self.secret = secret
-        vaultURL = vault
+        vaultURL = match?.url
+        vaultPayload = match?.payload
         vaultRevision += 1
         state = .unlocked
         prewarmKeys()
@@ -71,6 +77,7 @@ final class AppSession {
         secret?.wipe()
         secret = nil
         vaultURL = nil
+        vaultPayload = nil
         vaultCreation = nil
         preparedPhotoSalt = nil
         preparedVideoSalt = nil
@@ -110,6 +117,7 @@ final class AppSession {
         // Locked or re-keyed while creating.
         guard self.secret === secret else { throw CryptoError.locked }
         vaultURL = created
+        vaultPayload = .plain
         return created
     }
 
@@ -133,9 +141,53 @@ final class AppSession {
         settings.vaultLocation = location
         if let secret {
             let base = to
-            vaultURL = await Task.detached { try? VaultLocator.find(secret, in: base) }.value
+            // A lookup, never a duress unlock: moving can't wipe anything.
+            let match = await Task.detached { try? VaultLocator.match(secret, in: base) }.value
+            vaultURL = match?.url
+            vaultPayload = match?.payload
         }
         vaultRevision += 1
+    }
+
+    // MARK: Duress password
+
+    /// Sets up `duress` as this vault's duress password (creating this vault first if
+    /// nothing was saved yet). Returns the decoy vault. Throws
+    /// `VaultLocator.DuressPasswordInUse` if `duress` already opens a vault.
+    func setDuress(_ duress: Secret, scope: WipeScope) async throws -> URL {
+        let owner = try await ensureVault()
+        guard let secret else { throw CryptoError.locked }
+        let base = baseURL
+        let decoy = try await Task.detached(priority: .userInitiated) {
+            try VaultLocator.setDuress(owner: secret, vault: owner, duress: duress, scope: scope, in: base,
+                                       attributes: FileProtection.directoryAttributes)
+        }.value
+        guard self.secret === secret else { throw CryptoError.locked }
+        var payload = vaultPayload ?? .plain
+        payload.duressVault = decoy.url.lastPathComponent
+        payload.duressScope = scope
+        vaultPayload = payload
+        return decoy.url
+    }
+
+    /// Removes this vault's duress password and wipes its decoy vault.
+    func removeDuress() async throws {
+        guard let secret, let owner = vaultURL else { throw CryptoError.locked }
+        let base = baseURL
+        let payload = try await Task.detached(priority: .userInitiated) {
+            try VaultLocator.removeDuress(owner: secret, vault: owner, in: base)
+        }.value
+        guard self.secret === secret else { throw CryptoError.locked }
+        vaultPayload = payload
+    }
+
+    /// The decoy vault if `duress` is this vault's duress password, else nil. Never wipes.
+    func duressVault(for duress: Secret) async throws -> URL? {
+        guard let secret, let owner = vaultURL else { throw CryptoError.locked }
+        let base = baseURL
+        return try await Task.detached(priority: .userInitiated) {
+            try VaultLocator.duressVault(owner: secret, vault: owner, duress: duress, in: base)
+        }.value
     }
 
     // MARK: Key prewarming

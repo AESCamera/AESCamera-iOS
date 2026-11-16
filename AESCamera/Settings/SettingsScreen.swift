@@ -9,6 +9,7 @@ struct SettingsScreen: View {
     @State private var restoring = false
     @State private var progress: TransferProgress?
     @State private var message: String?
+    @State private var duressFlow = DuressFlow()
 
     var body: some View {
         @Bindable var settings = session.settings
@@ -47,6 +48,8 @@ struct SettingsScreen: View {
                 Text("Exports copy the encrypted files to a folder you choose, such as iCloud Drive or a USB drive. They stay encrypted and open only with this password, on iPhone or Android.")
             }
 
+            DuressSection(flow: duressFlow)
+
             Section {
                 Toggle("Rapid capture", isOn: $settings.rapidCapture)
                 Toggle("Show last capture", isOn: $settings.showLastCapture)
@@ -66,6 +69,7 @@ struct SettingsScreen: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .duressFlow(duressFlow, progress: $progress, message: $message)
         .confirmationDialog(moveTitle, isPresented: Binding(get: { pendingLocation != nil }, set: { if !$0 { pendingLocation = nil } }), titleVisibility: .visible) {
             Button("Move") { if let pendingLocation { move(to: pendingLocation) } }
         } message: {
@@ -167,12 +171,14 @@ struct SettingsScreen: View {
 final class TransferProgress: Identifiable {
     let id = UUID()
     let title: String
+    let cancellable: Bool
     private(set) var done = 0
     private(set) var total = 0
     @ObservationIgnored private let cancelled = CancelFlag()
 
-    init(title: String) {
+    init(title: String, cancellable: Bool = true) {
         self.title = title
+        self.cancellable = cancellable
     }
 
     func cancel() { cancelled.set() }
@@ -211,7 +217,9 @@ struct ProgressSheet: View {
             } else {
                 ProgressView()
             }
-            Button("Cancel", role: .cancel) { progress.cancel() }
+            if progress.cancellable {
+                Button("Cancel", role: .cancel) { progress.cancel() }
+            }
         }
         .padding(24)
     }

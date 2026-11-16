@@ -22,6 +22,10 @@ ever written to disk unencrypted. This is the native iOS version of
 - **Your key, your access.** The password is held in memory only and the app locks as soon
   as it goes to the background. Any password opens a vault; there's no wrong-password
   signal, and nothing is created until the first save.
+- **Duress password.** An optional second password for when someone forces you to unlock.
+  Entering it at the unlock prompt quietly wipes this vault (or every other vault), then
+  opens a decoy vault you can fill with harmless photos. Every vault's verifier is the same
+  size, so a duress vault can't be told apart from any other without its password.
 - **Your choice of storage.** Private app storage, or the Files app (On My iPhone ›
   AES Camera). Both are excluded from iCloud backups; use Export for backups.
 - **No tracking.** No analytics, no ads, no network code.

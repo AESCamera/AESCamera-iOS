@@ -1,6 +1,9 @@
+import CoreGraphics
 import CryptoKit
 import Foundation
+import ImageIO
 import Testing
+import UniformTypeIdentifiers
 @testable import AESCore
 
 /// Fast verifier cost for tests.
@@ -211,5 +214,52 @@ private func makeVault(_ password: String, in base: URL) throws -> URL {
         #expect(after.count == original.count)
         #expect(after.prefix(4096) != original.prefix(4096))
         #expect(after.suffix(from: 4096) == original.suffix(from: 4096))
+    }
+}
+
+@Suite struct DecoyImporterTests {
+    /// A small image of `type`, with an EXIF capture time when given.
+    private func image(_ type: UTType, takenAt stamp: String? = nil) throws -> Data {
+        let context = try #require(CGContext(
+            data: nil, width: 64, height: 48, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 48))
+        let cgImage = try #require(context.makeImage())
+        let out = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(out, type.identifier as CFString, 1, nil))
+        var properties: [CFString: Any] = [:]
+        if let stamp { properties[kCGImagePropertyExifDictionary] = [kCGImagePropertyExifDateTimeOriginal: stamp] }
+        CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        return out as Data
+    }
+
+    @Test func photosAreNamedByCaptureTimeAndGetThumbnails() throws {
+        let dir = try TempDir(); defer { dir.cleanup() }
+        let secret = Secret("duress")
+        let jpeg = try image(.jpeg, takenAt: "2025:06:01 09:30:15")
+        #expect(try DecoyImporter.add(jpeg, to: dir.url, secret: secret))
+        #expect(try DecoyImporter.add(jpeg, to: dir.url, secret: secret))
+
+        let items = VaultFiles.media(in: dir.url)
+        #expect(items.map(\.name).sorted() == ["IMG-2025-06-01-09-30-15-000.enc", "IMG-2025-06-01-09-30-15-001.enc"])
+        for item in items {
+            #expect(try ImageCrypto.open(Data(contentsOf: item.url), secret: secret) == jpeg)
+            #expect(FileManager.default.fileExists(atPath: item.thumbnailURL.path))
+        }
+    }
+
+    @Test func otherFormatsBecomeJPEGAndNonImagesAreSkipped() throws {
+        let dir = try TempDir(); defer { dir.cleanup() }
+        let secret = Secret("duress")
+        #expect(try DecoyImporter.add(try image(.png), to: dir.url, secret: secret))
+        #expect(try !DecoyImporter.add(Data("not an image".utf8), to: dir.url, secret: secret))
+
+        let items = VaultFiles.media(in: dir.url)
+        #expect(items.count == 1)
+        let stored = try ImageCrypto.open(Data(contentsOf: items[0].url), secret: secret)
+        #expect(stored.prefix(2) == Data([0xFF, 0xD8]))
     }
 }

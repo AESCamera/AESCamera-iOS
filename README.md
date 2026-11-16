@@ -42,6 +42,14 @@ screen is being recorded or mirrored, and says so when a screenshot is taken.
 | `AESCamera/` | The SwiftUI app. |
 | `AESCameraUITests/` | UI tests that drive the app in the Simulator. |
 
+## Installing a build
+
+Download `AESCamera.ipa` from the latest
+[release](https://github.com/AESCamera/AESCamera-iOS/releases/latest). It isn't on the App
+Store, so install it with [SideStore](https://sidestore.io), AltStore or Sideloadly, which
+sign it with your own Apple ID. With a free Apple ID you have to refresh the app every 7
+days; your photos and videos are kept when you do.
+
 ## Building
 
 Requires Xcode 26 or later; the app targets iOS 17 or later. Open `AESCamera.xcodeproj` and
